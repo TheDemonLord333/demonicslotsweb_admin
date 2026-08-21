@@ -1,13 +1,16 @@
 {
-  "name": "demonicslotsadminweb",
+  "name": "demonic-slots-admin",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Eigenständige Web-App zur Verwaltung von Spieler-Coin-Guthaben für Demonic Slots.",
+  "private": true,
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "npx --yes serve -l 5173 .",
+    "test": "echo \"no automated tests – manual QA against the live backend\" && exit 0"
   },
-  "keywords": [],
+  "keywords": [
+    "demonic-slots",
+    "admin"
+  ],
   "author": "",
-  "license": "ISC",
-  "type": "commonjs"
+  "license": "ISC"
 }
