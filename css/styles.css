@@ -15,6 +15,13 @@
   box-sizing: border-box;
 }
 
+/* The [hidden] attribute must always win over component display rules
+   (e.g. `.modal-backdrop { display: flex }`), otherwise elements toggled
+   via `el.hidden = true` in JS stay visible. */
+[hidden] {
+  display: none !important;
+}
+
 html, body {
   height: 100%;
 }
