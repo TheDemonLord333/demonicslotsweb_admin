@@ -37,6 +37,7 @@ const modalCreatedAt = document.getElementById('modal-created-at');
 const modalUpdatedAt = document.getElementById('modal-updated-at');
 const modalAdminRevision = document.getElementById('modal-admin-revision');
 const editForm = document.getElementById('edit-form');
+const usernameInput = document.getElementById('username-input');
 const balanceInput = document.getElementById('balance-input');
 const modalError = document.getElementById('modal-error');
 const modalCloseBtn = document.getElementById('modal-close-btn');
@@ -54,6 +55,7 @@ let editingUsername = null;
 
 /* ---------- formatting helpers ---------- */
 
+const USERNAME_PATTERN = /^[A-Za-z0-9_]{3,20}$/;
 const numberFormatter = new Intl.NumberFormat('de-DE');
 const dateFormatter = new Intl.DateTimeFormat('de-DE', {
   dateStyle: 'medium',
@@ -314,17 +316,18 @@ function openEditModal(username) {
   if (!player) return;
 
   editingUsername = username;
-  modalTitle.textContent = player.username;
+  modalTitle.textContent = 'Spieler bearbeiten';
   modalCurrentBalance.textContent = `${formatCoins(player.coinBalance)} Coins`;
   modalCreatedAt.textContent = formatDate(player.createdAt);
   modalUpdatedAt.textContent = formatDate(player.updatedAt);
   modalAdminRevision.textContent = `#${player.adminRevision ?? '—'}`;
+  usernameInput.value = player.username;
   balanceInput.value = player.coinBalance;
   modalError.hidden = true;
 
   editModal.hidden = false;
   document.body.classList.add('modal-open');
-  setTimeout(() => balanceInput.focus(), 0);
+  setTimeout(() => usernameInput.focus(), 0);
 }
 
 function closeEditModal() {
@@ -348,45 +351,82 @@ editForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   modalError.hidden = true;
 
-  const raw = balanceInput.value.trim();
-
-  if (!/^\d+$/.test(raw)) {
-    modalError.textContent = 'Bitte eine nicht-negative ganze Zahl eingeben.';
+  const newUsername = usernameInput.value.trim();
+  if (!USERNAME_PATTERN.test(newUsername)) {
+    modalError.textContent = 'Username muss 3–20 Zeichen sein (Buchstaben, Zahlen, „_“).';
     modalError.hidden = false;
     return;
   }
 
-  const balance = Number(raw);
+  const rawBalance = balanceInput.value.trim();
+  if (!/^\d+$/.test(rawBalance)) {
+    modalError.textContent = 'Bitte eine nicht-negative ganze Zahl eingeben.';
+    modalError.hidden = false;
+    return;
+  }
+  const balance = Number(rawBalance);
   if (!Number.isSafeInteger(balance) || balance < 0) {
     modalError.textContent = 'Bitte eine gültige, nicht-negative ganze Zahl eingeben.';
     modalError.hidden = false;
     return;
   }
 
-  const username = editingUsername;
+  // `currentUsername` tracks whichever username the API must be addressed
+  // under right now - it moves to the new one the moment the rename call
+  // succeeds, so the balance PATCH below always targets a username that
+  // still exists server-side, even if only the rename half of this submit
+  // succeeded.
+  let currentUsername = editingUsername;
+  let latestPlayer = players.find((p) => p.username === currentUsername);
+
   setBusy(modalSaveBtn, true);
 
   try {
-    const updated = await api.updateBalance(username, balance);
-    const index = players.findIndex((p) => p.username === username);
-    if (index !== -1) {
-      players[index] = updated;
+    if (newUsername !== currentUsername) {
+      const renamed = await api.renameUsername(currentUsername, newUsername);
+      // Reflect the rename immediately, even if the balance step below
+      // still fails - the row shouldn't keep showing a stale username.
+      replacePlayer(currentUsername, renamed);
+      currentUsername = renamed.username;
+      editingUsername = currentUsername;
+      latestPlayer = renamed;
     }
+
+    if (balance !== latestPlayer.coinBalance) {
+      const updated = await api.updateBalance(currentUsername, balance);
+      replacePlayer(currentUsername, updated);
+      latestPlayer = updated;
+    }
+
     closeEditModal();
     renderPlayers();
-    showToast(`Guthaben von „${username}“ auf ${formatCoins(updated.coinBalance)} Coins gesetzt.`, 'success');
+    showToast(`„${currentUsername}“ gespeichert: ${formatCoins(latestPlayer.coinBalance)} Coins.`, 'success');
   } catch (err) {
     if (err instanceof ApiError && err.code === 'unauthorized') {
       closeEditModal();
       logout('Sitzung abgelaufen oder Token ungültig. Bitte erneut anmelden.');
       return;
     }
+    // Keep the modal open on the (possibly already renamed) player so the
+    // admin can retry just the part that failed.
+    renderPlayers();
     modalError.textContent = describeError(err);
     modalError.hidden = false;
   } finally {
     setBusy(modalSaveBtn, false);
   }
 });
+
+/** Replaces the `players` entry currently keyed by `oldUsername` with
+ * `updated` (the fresh object from a rename or balance PATCH response). */
+function replacePlayer(oldUsername, updated) {
+  const index = players.findIndex((p) => p.username === oldUsername);
+  if (index !== -1) {
+    players[index] = updated;
+  } else {
+    players.push(updated);
+  }
+}
 
 /* ---------- init ---------- */
 
