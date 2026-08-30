@@ -48,6 +48,25 @@ export class DemonicSlotsApi {
       });
     }
 
+    if (response.status === 400 || response.status === 409) {
+      let errorCode = '';
+      try {
+        const body = await response.json();
+        errorCode = body && body.error ? body.error : '';
+      } catch {
+        /* ignore parse failure, fall back to a generic message below */
+      }
+      const messages = {
+        invalid_username: 'Ungültiger Username (3–20 Zeichen: Buchstaben, Zahlen, „_“).',
+        username_taken: 'Dieser Username ist bereits vergeben.',
+        invalid_balance: 'Ungültiges Guthaben.',
+      };
+      throw new ApiError(messages[errorCode] || `Ungültige Anfrage${errorCode ? ` (${errorCode})` : ''}.`, {
+        status: response.status,
+        code: errorCode || 'validation',
+      });
+    }
+
     if (response.status === 500) {
       let detail = '';
       try {
@@ -92,6 +111,13 @@ export class DemonicSlotsApi {
     return this.#request(`/api/admin/players/${encodeURIComponent(username)}/balance`, {
       method: 'PATCH',
       body: JSON.stringify({ balance }),
+    });
+  }
+
+  renameUsername(username, newUsername) {
+    return this.#request(`/api/admin/players/${encodeURIComponent(username)}/username`, {
+      method: 'PATCH',
+      body: JSON.stringify({ username: newUsername }),
     });
   }
 }

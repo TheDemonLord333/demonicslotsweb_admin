@@ -120,7 +120,7 @@
 <div id="edit-modal" class="modal-backdrop" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <button class="modal-close" id="modal-close-btn" type="button" aria-label="Schließen">&times;</button>
-    <h2 id="modal-title">Spieler</h2>
+    <h2 id="modal-title">Spieler bearbeiten</h2>
 
     <div class="modal-meta">
       <div class="meta-row">
@@ -142,6 +142,21 @@
     </div>
 
     <form id="edit-form" novalidate>
+      <label class="field">
+        <span class="field-label">Username</span>
+        <input
+          type="text"
+          id="username-input"
+          name="username"
+          minlength="3"
+          maxlength="20"
+          pattern="[A-Za-z0-9_]{3,20}"
+          autocomplete="off"
+          required
+        />
+        <span class="field-hint">3–20 Zeichen: Buchstaben, Zahlen, „_“.</span>
+      </label>
+
       <label class="field">
         <span class="field-label">Neues Guthaben</span>
         <input type="number" id="balance-input" name="balance" min="0" step="1" inputmode="numeric" required />
