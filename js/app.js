@@ -51,7 +51,7 @@ const toastContainer = document.getElementById('toast-container');
 let api = null;
 let players = [];
 let searchTerm = '';
-let editingUsername = null;
+let editingId = null;
 
 /* ---------- formatting helpers ---------- */
 
@@ -185,7 +185,7 @@ logoutBtn.addEventListener('click', () => {
 function logout(message) {
   api = null;
   players = [];
-  editingUsername = null;
+  editingId = null;
   clearSession();
   adminTokenInput.value = '';
   loginError.hidden = true;
@@ -283,12 +283,12 @@ function renderPlayers() {
   playersTbody.innerHTML = filtered
     .map(
       (p) => `
-    <tr data-username="${escapeHtml(p.username)}">
+    <tr data-id="${escapeHtml(p.id)}">
       <td data-label="Username"><span class="username">${escapeHtml(p.username)}</span></td>
       <td data-label="Guthaben"><span class="balance">${formatCoins(p.coinBalance)}</span></td>
       <td data-label="Zuletzt aktualisiert"><span class="timestamp">${formatDate(p.updatedAt)}</span></td>
       <td data-label="" class="action-cell">
-        <button type="button" class="btn btn-outline btn-small edit-btn" data-username="${escapeHtml(p.username)}">
+        <button type="button" class="btn btn-outline btn-small edit-btn" data-id="${escapeHtml(p.id)}">
           Bearbeiten
         </button>
       </td>
@@ -300,22 +300,22 @@ function renderPlayers() {
 playersTbody.addEventListener('click', (event) => {
   const btn = event.target.closest('.edit-btn');
   if (!btn) return;
-  openEditModal(btn.dataset.username);
+  openEditModal(btn.dataset.id);
 });
 
 playersTbody.addEventListener('dblclick', (event) => {
-  const row = event.target.closest('tr[data-username]');
+  const row = event.target.closest('tr[data-id]');
   if (!row) return;
-  openEditModal(row.dataset.username);
+  openEditModal(row.dataset.id);
 });
 
 /* ---------- edit modal ---------- */
 
-function openEditModal(username) {
-  const player = players.find((p) => p.username === username);
+function openEditModal(id) {
+  const player = players.find((p) => p.id === id);
   if (!player) return;
 
-  editingUsername = username;
+  editingId = id;
   modalTitle.textContent = 'Spieler bearbeiten';
   modalCurrentBalance.textContent = `${formatCoins(player.coinBalance)} Coins`;
   modalCreatedAt.textContent = formatDate(player.createdAt);
@@ -332,7 +332,7 @@ function openEditModal(username) {
 
 function closeEditModal() {
   editModal.hidden = true;
-  editingUsername = null;
+  editingId = null;
   document.body.classList.remove('modal-open');
 }
 
@@ -371,36 +371,30 @@ editForm.addEventListener('submit', async (event) => {
     return;
   }
 
-  // `currentUsername` tracks whichever username the API must be addressed
-  // under right now - it moves to the new one the moment the rename call
-  // succeeds, so the balance PATCH below always targets a username that
-  // still exists server-side, even if only the rename half of this submit
-  // succeeded.
-  let currentUsername = editingUsername;
-  let latestPlayer = players.find((p) => p.username === currentUsername);
+  // Players are addressed by their stable `id` for both calls below, so
+  // (unlike a username-keyed API) a rename can never invalidate the
+  // balance call that follows it - order between the two doesn't matter.
+  const id = editingId;
+  let latestPlayer = players.find((p) => p.id === id);
 
   setBusy(modalSaveBtn, true);
 
   try {
-    if (newUsername !== currentUsername) {
-      const renamed = await api.renameUsername(currentUsername, newUsername);
+    if (newUsername !== latestPlayer.username) {
+      latestPlayer = await api.renameUsername(id, newUsername);
       // Reflect the rename immediately, even if the balance step below
       // still fails - the row shouldn't keep showing a stale username.
-      replacePlayer(currentUsername, renamed);
-      currentUsername = renamed.username;
-      editingUsername = currentUsername;
-      latestPlayer = renamed;
+      replacePlayer(id, latestPlayer);
     }
 
     if (balance !== latestPlayer.coinBalance) {
-      const updated = await api.updateBalance(currentUsername, balance);
-      replacePlayer(currentUsername, updated);
-      latestPlayer = updated;
+      latestPlayer = await api.updateBalance(id, balance);
+      replacePlayer(id, latestPlayer);
     }
 
     closeEditModal();
     renderPlayers();
-    showToast(`„${currentUsername}“ gespeichert: ${formatCoins(latestPlayer.coinBalance)} Coins.`, 'success');
+    showToast(`„${latestPlayer.username}“ gespeichert: ${formatCoins(latestPlayer.coinBalance)} Coins.`, 'success');
   } catch (err) {
     if (err instanceof ApiError && err.code === 'unauthorized') {
       closeEditModal();
@@ -417,10 +411,10 @@ editForm.addEventListener('submit', async (event) => {
   }
 });
 
-/** Replaces the `players` entry currently keyed by `oldUsername` with
- * `updated` (the fresh object from a rename or balance PATCH response). */
-function replacePlayer(oldUsername, updated) {
-  const index = players.findIndex((p) => p.username === oldUsername);
+/** Replaces the `players` entry with stable id `id` with `updated` (the
+ * fresh object from a rename or balance PATCH response). */
+function replacePlayer(id, updated) {
+  const index = players.findIndex((p) => p.id === id);
   if (index !== -1) {
     players[index] = updated;
   } else {
