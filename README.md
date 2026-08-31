@@ -14,15 +14,17 @@ Multi-User-Anspruch, keine Registrierung.
 - **Spielerübersicht**: Tabelle aller Spieler mit Username, Guthaben und
   letztem Aktualisierungszeitpunkt, inkl. Such-/Filterfeld und
   Aktualisieren-Button.
-- **Guthaben & Username bearbeiten**: Klick auf einen Spieler öffnet ein
-  Modal mit Erstellungs-/Aktualisierungsdatum und der Admin-Revision.
-  Username (3–20 Zeichen: Buchstaben, Zahlen, `_`) und Guthaben
-  (nicht-negative Ganzzahl) werden vor dem Speichern clientseitig validiert;
-  ein Klick auf „Speichern“ ruft nur die Endpunkte auf, deren Wert sich
-  tatsächlich geändert hat (Rename zuerst, falls nötig, danach die
-  Guthaben-Änderung unter dem – ggf. neuen – Username). Ein bereits
-  vergebener Username liefert eine klare Fehlermeldung, das Modal bleibt
-  dabei offen.
+- **Guthaben & Username bearbeiten**: Jeder Spieler wird intern über eine
+  stabile, unveränderliche `id` angesprochen (nicht mehr über den
+  Username) – ein Rename ändert also nur das Label, nicht die Identität
+  des Spielers, und Rename/Guthaben-Änderung können unabhängig
+  voneinander erfolgen. Klick auf einen Spieler öffnet ein Modal mit
+  Erstellungs-/Aktualisierungsdatum und der Admin-Revision. Username
+  (3–20 Zeichen: Buchstaben, Zahlen, `_`) und Guthaben (nicht-negative
+  Ganzzahl) werden vor dem Speichern clientseitig validiert; ein Klick auf
+  „Speichern“ ruft nur die Endpunkte auf, deren Wert sich tatsächlich
+  geändert hat. Ein bereits vergebener Username liefert eine klare
+  Fehlermeldung, das Modal bleibt dabei offen.
 - **Fehlerbehandlung**: ungültiger/abgelaufener Token führt zurück zum Login
   mit Hinweistext, Netzwerk-/Serverfehler zeigen eine Fehlermeldung mit
   „Erneut versuchen“-Button.
@@ -113,17 +115,20 @@ Jeder Request an `/api/admin/*` benötigt den Header
 
 | Methode | Pfad | Beschreibung |
 |---|---|---|
-| `GET` | `/api/admin/players` | Liste aller Spieler |
-| `GET` | `/api/admin/players/:username` | Einzelner Spieler (`404` bei unbekanntem Username) |
-| `PATCH` | `/api/admin/players/:username/balance` | Body `{ "balance": Int }` (nicht-negativ); Server erhöht `adminRevision` automatisch |
-| `PATCH` | `/api/admin/players/:username/username` | Body `{ "username": String }` (3–20 Zeichen, Buchstaben/Zahlen/`_`); `404` falls `:username` nicht existiert, `409` bei bereits vergebenem Namen, `400` bei ungültigem Format. Ändert nicht `coinBalance`/`adminRevision` |
+| `GET` | `/api/admin/players` | Liste aller Spieler. Jeder Eintrag enthält ein stabiles `id`-Feld – **das** ist der eigentliche Identifier, `username` ist nur ein änderbares Label darauf |
+| `GET` | `/api/admin/players/:id` | Einzelner Spieler, adressiert über seine stabile `id` (`404` bei unbekannter ID) |
+| `PATCH` | `/api/admin/players/:id/balance` | Body `{ "balance": Int }` (nicht-negativ); Server erhöht `adminRevision` automatisch |
+| `PATCH` | `/api/admin/players/:id/username` | Body `{ "username": String }` (3–20 Zeichen, Buchstaben/Zahlen/`_`); `404` falls `:id` nicht existiert, `409` bei bereits vergebenem Namen (durch einen *anderen* Spieler), `400` bei ungültigem Format. Ändert nicht `coinBalance`/`adminRevision` |
 
 `401` bei fehlendem/falschem Token, `500` wenn `ADMIN_TOKEN` serverseitig
 nicht gesetzt ist.
 
-> Hinweis: Dieser Rename-Endpoint ist nicht Teil der ursprünglichen
-> Backend-Spezifikation und wurde für dieses Feature ergänzt (siehe
-> `demonicslotsios`-Repo, Branch `feature/admin-rename-player`). Er muss auf
-> dem Server deployt sein, bevor die Rename-Funktion in dieser App
-> funktioniert – bis dahin liefert `PATCH .../username` hier einen 404 vom
-> Backend (Route existiert nicht).
+> Hinweis: `id` sowie die beiden `:id`-basierten Endpunkte oben sind nicht
+> Teil der ursprünglichen Backend-Spezifikation und wurden für dieses
+> Feature ergänzt (siehe `demonicslotsios`-Repo, Branch
+> `feature/admin-rename-player`). Das Backend migriert seine bestehende
+> Datenbank beim ersten Start mit diesem Code automatisch (alte Tabelle
+> bleibt als Backup erhalten) – muss aber deployt sein, bevor diese App
+> funktioniert: mit dem alten Backend-Stand laufen `GET`/`PATCH
+> .../players/:id` ins Leere (404), weil die Routen dort noch über
+> `:username` adressiert werden.

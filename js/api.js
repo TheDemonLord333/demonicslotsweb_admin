@@ -42,7 +42,7 @@ export class DemonicSlotsApi {
     }
 
     if (response.status === 404) {
-      throw new ApiError('Spieler wurde nicht gefunden.', {
+      throw new ApiError('Spieler wurde nicht gefunden (evtl. wurde er zwischenzeitlich gelöscht).', {
         status: 404,
         code: 'not_found',
       });
@@ -99,23 +99,26 @@ export class DemonicSlotsApi {
     }
   }
 
+  // All per-player endpoints address a player by their stable `id` (never
+  // by `username`, which is just a mutable label the admin can rename).
+
   getPlayers() {
     return this.#request('/api/admin/players');
   }
 
-  getPlayer(username) {
-    return this.#request(`/api/admin/players/${encodeURIComponent(username)}`);
+  getPlayer(id) {
+    return this.#request(`/api/admin/players/${encodeURIComponent(id)}`);
   }
 
-  updateBalance(username, balance) {
-    return this.#request(`/api/admin/players/${encodeURIComponent(username)}/balance`, {
+  updateBalance(id, balance) {
+    return this.#request(`/api/admin/players/${encodeURIComponent(id)}/balance`, {
       method: 'PATCH',
       body: JSON.stringify({ balance }),
     });
   }
 
-  renameUsername(username, newUsername) {
-    return this.#request(`/api/admin/players/${encodeURIComponent(username)}/username`, {
+  renameUsername(id, newUsername) {
+    return this.#request(`/api/admin/players/${encodeURIComponent(id)}/username`, {
       method: 'PATCH',
       body: JSON.stringify({ username: newUsername }),
     });
