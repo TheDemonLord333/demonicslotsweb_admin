@@ -60,6 +60,9 @@ export class DemonicSlotsApi {
         invalid_username: 'Ungültiger Username (3–20 Zeichen: Buchstaben, Zahlen, „_“).',
         username_taken: 'Dieser Username ist bereits vergeben.',
         invalid_balance: 'Ungültiges Guthaben.',
+        invalid_level: 'Ungültiges Level (1–100).',
+        invalid_win_chance_multiplier: 'Ungültiger Wahrscheinlichkeits-Multiplikator (0,10–2,00).',
+        no_fields_to_update: 'Keine Änderung zum Speichern.',
       };
       throw new ApiError(messages[errorCode] || `Ungültige Anfrage${errorCode ? ` (${errorCode})` : ''}.`, {
         status: response.status,
@@ -110,17 +113,19 @@ export class DemonicSlotsApi {
     return this.#request(`/api/admin/players/${encodeURIComponent(id)}`);
   }
 
-  updateBalance(id, balance) {
-    return this.#request(`/api/admin/players/${encodeURIComponent(id)}/balance`, {
+  /**
+   * One PATCH covering every admin-editable field: pass only the ones
+   * that actually changed (any non-empty subset of `username`, `balance`,
+   * `level`, `winChanceMultiplier`). Matches the backend's consolidated
+   * `PATCH /api/admin/players/:id` - a rename and a balance/level/
+   * multiplier change in the same edit go out as one request, so there's
+   * no risk of one succeeding and the other targeting a since-renamed
+   * player under a stale reference.
+   */
+  updatePlayer(id, fields) {
+    return this.#request(`/api/admin/players/${encodeURIComponent(id)}`, {
       method: 'PATCH',
-      body: JSON.stringify({ balance }),
-    });
-  }
-
-  renameUsername(id, newUsername) {
-    return this.#request(`/api/admin/players/${encodeURIComponent(id)}/username`, {
-      method: 'PATCH',
-      body: JSON.stringify({ username: newUsername }),
+      body: JSON.stringify(fields),
     });
   }
 }

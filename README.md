@@ -11,20 +11,24 @@ Multi-User-Anspruch, keine Registrierung.
   ausschließlich im `sessionStorage` des Browser-Tabs gehalten (nicht in
   `localStorage`, nirgends im Code hinterlegt) und verschwindet beim Schließen
   des Tabs oder per „Abmelden“.
-- **Spielerübersicht**: Tabelle aller Spieler mit Username, Guthaben und
-  letztem Aktualisierungszeitpunkt, inkl. Such-/Filterfeld und
+- **Spielerübersicht**: Tabelle aller Spieler mit Username, Guthaben,
+  Level, Wahrscheinlichkeits-Multiplikator und letztem
+  Aktualisierungszeitpunkt, inkl. Such-/Filterfeld und
   Aktualisieren-Button.
-- **Guthaben & Username bearbeiten**: Jeder Spieler wird intern über eine
-  stabile, unveränderliche `id` angesprochen (nicht mehr über den
-  Username) – ein Rename ändert also nur das Label, nicht die Identität
-  des Spielers, und Rename/Guthaben-Änderung können unabhängig
-  voneinander erfolgen. Klick auf einen Spieler öffnet ein Modal mit
-  Erstellungs-/Aktualisierungsdatum und der Admin-Revision. Username
-  (3–20 Zeichen: Buchstaben, Zahlen, `_`) und Guthaben (nicht-negative
-  Ganzzahl) werden vor dem Speichern clientseitig validiert; ein Klick auf
-  „Speichern“ ruft nur die Endpunkte auf, deren Wert sich tatsächlich
-  geändert hat. Ein bereits vergebener Username liefert eine klare
-  Fehlermeldung, das Modal bleibt dabei offen.
+- **Guthaben, Username, Level & Multiplikator bearbeiten**: Jeder Spieler
+  wird intern über eine stabile, unveränderliche `id` angesprochen (nicht
+  über den Username) – ein Rename ändert also nur das Label, nicht die
+  Identität des Spielers. Klick auf einen Spieler öffnet ein Modal mit
+  Erstellungs-/Aktualisierungsdatum, Admin-Revision und vier editierbaren
+  Feldern: Username (3–20 Zeichen: Buchstaben, Zahlen, `_`), Guthaben
+  (nicht-negative Ganzzahl), Level (Ganzzahl 1–100) und
+  Wahrscheinlichkeits-Multiplikator (0,10–2,00; 1,0 = neutral – steuert im
+  Spiel serverseitig, wie stark die Gewinnchance eines Spielers zusätzlich
+  zu seinem Level-Bonus angehoben/gesenkt wird). Alle vier Felder werden
+  vor dem Speichern clientseitig validiert; „Speichern“ überträgt in
+  **einem** Request nur die Felder, die sich tatsächlich geändert haben.
+  Ein bereits vergebener Username liefert eine klare Fehlermeldung, das
+  Modal bleibt dabei offen.
 - **Fehlerbehandlung**: ungültiger/abgelaufener Token führt zurück zum Login
   mit Hinweistext, Netzwerk-/Serverfehler zeigen eine Fehlermeldung mit
   „Erneut versuchen“-Button.
@@ -115,20 +119,20 @@ Jeder Request an `/api/admin/*` benötigt den Header
 
 | Methode | Pfad | Beschreibung |
 |---|---|---|
-| `GET` | `/api/admin/players` | Liste aller Spieler. Jeder Eintrag enthält ein stabiles `id`-Feld – **das** ist der eigentliche Identifier, `username` ist nur ein änderbares Label darauf |
+| `GET` | `/api/admin/players` | Liste aller Spieler. Jeder Eintrag enthält ein stabiles `id`-Feld – **das** ist der eigentliche Identifier, `username` ist nur ein änderbares Label darauf – sowie `level` und `winChanceMultiplier` |
 | `GET` | `/api/admin/players/:id` | Einzelner Spieler, adressiert über seine stabile `id` (`404` bei unbekannter ID) |
-| `PATCH` | `/api/admin/players/:id/balance` | Body `{ "balance": Int }` (nicht-negativ); Server erhöht `adminRevision` automatisch |
-| `PATCH` | `/api/admin/players/:id/username` | Body `{ "username": String }` (3–20 Zeichen, Buchstaben/Zahlen/`_`); `404` falls `:id` nicht existiert, `409` bei bereits vergebenem Namen (durch einen *anderen* Spieler), `400` bei ungültigem Format. Ändert nicht `coinBalance`/`adminRevision` |
+| `PATCH` | `/api/admin/players/:id` | Body: beliebige nicht-leere Teilmenge von `{ "username": String, "balance": Int, "level": Int, "winChanceMultiplier": Number }` – es werden nur die tatsächlich geänderten Felder gesendet. `username`: 3–20 Zeichen, Buchstaben/Zahlen/`_`. `balance`: nicht-negative Ganzzahl, erhöht serverseitig `adminRevision`. `level`: Ganzzahl 1–100. `winChanceMultiplier`: Zahl 0,10–2,00. `404` falls `:id` nicht existiert, `409` bei bereits vergebenem Username (durch einen *anderen* Spieler), `400` bei ungültigem Feldwert oder leerem Body |
 
 `401` bei fehlendem/falschem Token, `500` wenn `ADMIN_TOKEN` serverseitig
 nicht gesetzt ist.
 
-> Hinweis: `id` sowie die beiden `:id`-basierten Endpunkte oben sind nicht
-> Teil der ursprünglichen Backend-Spezifikation und wurden für dieses
-> Feature ergänzt (siehe `demonicslotsios`-Repo, Branch
-> `feature/admin-rename-player`). Das Backend migriert seine bestehende
-> Datenbank beim ersten Start mit diesem Code automatisch (alte Tabelle
-> bleibt als Backup erhalten) – muss aber deployt sein, bevor diese App
-> funktioniert: mit dem alten Backend-Stand laufen `GET`/`PATCH
-> .../players/:id` ins Leere (404), weil die Routen dort noch über
-> `:username` adressiert werden.
+> Hinweis: `id`, `level`, `winChanceMultiplier` sowie der `:id`-basierte
+> Endpunkt oben sind nicht Teil der ursprünglichen Backend-Spezifikation
+> und wurden nachträglich ergänzt (siehe `demonicslotsios`-Repo, Branch
+> `claude/demonic-slots-ios-game-hbg5vm`, PR #6). Das Backend migriert
+> seine bestehende Datenbank beim ersten Start mit diesem Code automatisch
+> (alte Tabelle(n) bleiben als Backup erhalten) – muss aber deployt sein,
+> bevor diese App funktioniert: mit einem älteren Backend-Stand laufen
+> `GET`/`PATCH .../players/:id` ins Leere (404), weil die Routen dort noch
+> über `:username` adressiert werden bzw. `level`/`winChanceMultiplier`
+> noch gar nicht existieren.
