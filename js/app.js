@@ -39,6 +39,8 @@ const modalAdminRevision = document.getElementById('modal-admin-revision');
 const editForm = document.getElementById('edit-form');
 const usernameInput = document.getElementById('username-input');
 const balanceInput = document.getElementById('balance-input');
+const levelInput = document.getElementById('level-input');
+const multiplierInput = document.getElementById('multiplier-input');
 const modalError = document.getElementById('modal-error');
 const modalCloseBtn = document.getElementById('modal-close-btn');
 const modalCancelBtn = document.getElementById('modal-cancel-btn');
@@ -56,7 +58,12 @@ let editingId = null;
 /* ---------- formatting helpers ---------- */
 
 const USERNAME_PATTERN = /^[A-Za-z0-9_]{3,20}$/;
+const MIN_LEVEL = 1;
+const MAX_LEVEL = 100;
+const MIN_MULTIPLIER = 0.1;
+const MAX_MULTIPLIER = 2.0;
 const numberFormatter = new Intl.NumberFormat('de-DE');
+const multiplierFormatter = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const dateFormatter = new Intl.DateTimeFormat('de-DE', {
   dateStyle: 'medium',
   timeStyle: 'short',
@@ -64,6 +71,10 @@ const dateFormatter = new Intl.DateTimeFormat('de-DE', {
 
 function formatCoins(value) {
   return numberFormatter.format(value);
+}
+
+function formatMultiplier(value) {
+  return multiplierFormatter.format(value);
 }
 
 function formatDate(iso) {
@@ -286,6 +297,8 @@ function renderPlayers() {
     <tr data-id="${escapeHtml(p.id)}">
       <td data-label="Username"><span class="username">${escapeHtml(p.username)}</span></td>
       <td data-label="Guthaben"><span class="balance">${formatCoins(p.coinBalance)}</span></td>
+      <td data-label="Level"><span class="level">${escapeHtml(String(p.level))}</span></td>
+      <td data-label="Multiplikator"><span class="multiplier">${formatMultiplier(p.winChanceMultiplier)}×</span></td>
       <td data-label="Zuletzt aktualisiert"><span class="timestamp">${formatDate(p.updatedAt)}</span></td>
       <td data-label="" class="action-cell">
         <button type="button" class="btn btn-outline btn-small edit-btn" data-id="${escapeHtml(p.id)}">
@@ -323,6 +336,8 @@ function openEditModal(id) {
   modalAdminRevision.textContent = `#${player.adminRevision ?? '—'}`;
   usernameInput.value = player.username;
   balanceInput.value = player.coinBalance;
+  levelInput.value = player.level;
+  multiplierInput.value = player.winChanceMultiplier;
   modalError.hidden = true;
 
   editModal.hidden = false;
@@ -371,39 +386,53 @@ editForm.addEventListener('submit', async (event) => {
     return;
   }
 
-  // Players are addressed by their stable `id` for both calls below, so
-  // (unlike a username-keyed API) a rename can never invalidate the
-  // balance call that follows it - order between the two doesn't matter.
+  const rawLevel = levelInput.value.trim();
+  const level = Number(rawLevel);
+  if (!/^\d+$/.test(rawLevel) || !Number.isInteger(level) || level < MIN_LEVEL || level > MAX_LEVEL) {
+    modalError.textContent = `Level muss eine ganze Zahl zwischen ${MIN_LEVEL} und ${MAX_LEVEL} sein.`;
+    modalError.hidden = false;
+    return;
+  }
+
+  const rawMultiplier = multiplierInput.value.trim();
+  const multiplier = Number(rawMultiplier);
+  if (rawMultiplier === '' || !Number.isFinite(multiplier) || multiplier < MIN_MULTIPLIER || multiplier > MAX_MULTIPLIER) {
+    modalError.textContent = `Multiplikator muss zwischen ${MIN_MULTIPLIER.toFixed(2)} und ${MAX_MULTIPLIER.toFixed(2)} liegen.`;
+    modalError.hidden = false;
+    return;
+  }
+
   const id = editingId;
-  let latestPlayer = players.find((p) => p.id === id);
+  const current = players.find((p) => p.id === id);
+
+  // One PATCH covering everything that actually changed - the backend
+  // addresses it by id, so a rename in the same request never risks the
+  // balance/level/multiplier part landing on a stale reference.
+  const fields = {};
+  if (newUsername !== current.username) fields.username = newUsername;
+  if (balance !== current.coinBalance) fields.balance = balance;
+  if (level !== current.level) fields.level = level;
+  if (multiplier !== current.winChanceMultiplier) fields.winChanceMultiplier = multiplier;
+
+  if (Object.keys(fields).length === 0) {
+    closeEditModal();
+    return;
+  }
 
   setBusy(modalSaveBtn, true);
 
   try {
-    if (newUsername !== latestPlayer.username) {
-      latestPlayer = await api.renameUsername(id, newUsername);
-      // Reflect the rename immediately, even if the balance step below
-      // still fails - the row shouldn't keep showing a stale username.
-      replacePlayer(id, latestPlayer);
-    }
-
-    if (balance !== latestPlayer.coinBalance) {
-      latestPlayer = await api.updateBalance(id, balance);
-      replacePlayer(id, latestPlayer);
-    }
-
+    const updated = await api.updatePlayer(id, fields);
+    replacePlayer(id, updated);
     closeEditModal();
     renderPlayers();
-    showToast(`„${latestPlayer.username}“ gespeichert: ${formatCoins(latestPlayer.coinBalance)} Coins.`, 'success');
+    showToast(`„${updated.username}“ gespeichert: ${formatCoins(updated.coinBalance)} Coins, Level ${updated.level}, ${formatMultiplier(updated.winChanceMultiplier)}×.`, 'success');
   } catch (err) {
     if (err instanceof ApiError && err.code === 'unauthorized') {
       closeEditModal();
       logout('Sitzung abgelaufen oder Token ungültig. Bitte erneut anmelden.');
       return;
     }
-    // Keep the modal open on the (possibly already renamed) player so the
-    // admin can retry just the part that failed.
-    renderPlayers();
     modalError.textContent = describeError(err);
     modalError.hidden = false;
   } finally {
@@ -412,7 +441,7 @@ editForm.addEventListener('submit', async (event) => {
 });
 
 /** Replaces the `players` entry with stable id `id` with `updated` (the
- * fresh object from a rename or balance PATCH response). */
+ * fresh object from the PATCH response). */
 function replacePlayer(id, updated) {
   const index = players.findIndex((p) => p.id === id);
   if (index !== -1) {
