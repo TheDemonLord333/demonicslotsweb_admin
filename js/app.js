@@ -41,6 +41,7 @@ const usernameInput = document.getElementById('username-input');
 const balanceInput = document.getElementById('balance-input');
 const levelInput = document.getElementById('level-input');
 const multiplierInput = document.getElementById('multiplier-input');
+const jackpotInput = document.getElementById('jackpot-input');
 const modalError = document.getElementById('modal-error');
 const modalCloseBtn = document.getElementById('modal-close-btn');
 const modalCancelBtn = document.getElementById('modal-cancel-btn');
@@ -299,6 +300,11 @@ function renderPlayers() {
       <td data-label="Guthaben"><span class="balance">${formatCoins(p.coinBalance)}</span></td>
       <td data-label="Level"><span class="level">${escapeHtml(String(p.level))}</span></td>
       <td data-label="Multiplikator"><span class="multiplier">${formatMultiplier(p.winChanceMultiplier)}×</span></td>
+      <td data-label="Jackpot">${
+        p.guaranteedJackpot
+          ? '<span class="jackpot-badge jackpot-badge-on" title="Garantierter Jackpot ist aktiv">🔥 Aktiv</span>'
+          : '<span class="jackpot-badge jackpot-badge-off">Aus</span>'
+      }</td>
       <td data-label="Zuletzt aktualisiert"><span class="timestamp">${formatDate(p.updatedAt)}</span></td>
       <td data-label="" class="action-cell">
         <button type="button" class="btn btn-outline btn-small edit-btn" data-id="${escapeHtml(p.id)}">
@@ -338,6 +344,7 @@ function openEditModal(id) {
   balanceInput.value = player.coinBalance;
   levelInput.value = player.level;
   multiplierInput.value = player.winChanceMultiplier;
+  jackpotInput.checked = !!player.guaranteedJackpot;
   modalError.hidden = true;
 
   editModal.hidden = false;
@@ -402,17 +409,20 @@ editForm.addEventListener('submit', async (event) => {
     return;
   }
 
+  const jackpot = jackpotInput.checked;
+
   const id = editingId;
   const current = players.find((p) => p.id === id);
 
   // One PATCH covering everything that actually changed - the backend
   // addresses it by id, so a rename in the same request never risks the
-  // balance/level/multiplier part landing on a stale reference.
+  // balance/level/multiplier/jackpot part landing on a stale reference.
   const fields = {};
   if (newUsername !== current.username) fields.username = newUsername;
   if (balance !== current.coinBalance) fields.balance = balance;
   if (level !== current.level) fields.level = level;
   if (multiplier !== current.winChanceMultiplier) fields.winChanceMultiplier = multiplier;
+  if (jackpot !== !!current.guaranteedJackpot) fields.guaranteedJackpot = jackpot;
 
   if (Object.keys(fields).length === 0) {
     closeEditModal();
@@ -426,7 +436,8 @@ editForm.addEventListener('submit', async (event) => {
     replacePlayer(id, updated);
     closeEditModal();
     renderPlayers();
-    showToast(`„${updated.username}“ gespeichert: ${formatCoins(updated.coinBalance)} Coins, Level ${updated.level}, ${formatMultiplier(updated.winChanceMultiplier)}×.`, 'success');
+    const jackpotNote = updated.guaranteedJackpot ? ', Jackpot garantiert 🔥' : '';
+    showToast(`„${updated.username}“ gespeichert: ${formatCoins(updated.coinBalance)} Coins, Level ${updated.level}, ${formatMultiplier(updated.winChanceMultiplier)}×${jackpotNote}.`, 'success');
   } catch (err) {
     if (err instanceof ApiError && err.code === 'unauthorized') {
       closeEditModal();

@@ -200,6 +200,36 @@ h1, h2 {
   color: rgba(232, 222, 201, 0.5);
 }
 
+.field-checkbox {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 0.6rem;
+  align-items: center;
+  padding: 0.7rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  background: var(--obsidian-black);
+}
+
+.field-checkbox input[type="checkbox"] {
+  grid-row: 1 / 2;
+  width: 1.15rem;
+  height: 1.15rem;
+  accent-color: var(--hellfire-red);
+  cursor: pointer;
+}
+
+.field-checkbox-label {
+  grid-row: 1 / 2;
+  margin-bottom: 0;
+  cursor: pointer;
+}
+
+.field-checkbox .field-hint {
+  grid-column: 2 / 3;
+  margin-top: 0.3rem;
+}
+
 input[type="text"],
 input[type="url"],
 input[type="password"],
@@ -459,6 +489,25 @@ input:focus {
 .timestamp {
   font-size: 0.85rem;
   color: rgba(232, 222, 201, 0.65);
+}
+
+.jackpot-badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.jackpot-badge-on {
+  background: rgba(226, 45, 61, 0.18);
+  color: var(--hellfire-red);
+  box-shadow: 0 0 10px rgba(226, 45, 61, 0.35);
+}
+
+.jackpot-badge-off {
+  color: rgba(232, 222, 201, 0.45);
 }
 
 .action-cell {
